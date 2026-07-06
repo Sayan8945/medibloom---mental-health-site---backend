@@ -50,16 +50,23 @@ const allowedOrigins = (process.env.CLIENT_URL || '')
   .map((o) => o.trim())
   .filter(Boolean);
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, cb) => {
-    // Allow requests with no origin (mobile apps, curl, same-origin)
+    // Allow requests with no origin (server-to-server, curl, mobile)
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS: origin ${origin} not allowed`));
+    // Return null (not an error) so Express doesn't throw — browser gets a
+    // proper CORS rejection rather than a 500 with no CORS headers at all
+    return cb(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+};
+
+app.use(cors(corsOptions));
+
+// Answer preflight OPTIONS immediately, before session/passport can crash it
+app.options('*', cors(corsOptions));
 
 // ── Rate limiting ──────────────────────────────────────────────
 app.use('/api/auth/google', rateLimit({
