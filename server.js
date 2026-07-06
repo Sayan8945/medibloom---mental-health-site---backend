@@ -47,15 +47,20 @@ app.use(helmet({
 // ── CORS ───────────────────────────────────────────────────────
 const allowedOrigins = (process.env.CLIENT_URL || '')
   .split(',')
-  .map((o) => o.trim())
+  .map((o) => o.trim().replace(/\/$/, ''))  // strip trailing slash
   .filter(Boolean);
+
+// Log on startup so you can verify Railway has the right value
+console.log('[cors] Allowed origins:', allowedOrigins);
 
 const corsOptions = {
   origin: (origin, cb) => {
     // Allow requests with no origin (server-to-server, curl, mobile)
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    // Return null (not an error) so Express doesn't throw — browser gets a
-    // proper CORS rejection rather than a 500 with no CORS headers at all
+    if (!origin) return cb(null, true);
+    // Normalize incoming origin the same way (strip trailing slash)
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    if (allowedOrigins.includes(normalizedOrigin)) return cb(null, true);
+    console.warn(`[cors] Blocked origin: "${origin}"`);
     return cb(null, false);
   },
   credentials: true,
