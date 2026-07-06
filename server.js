@@ -66,7 +66,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Answer preflight OPTIONS immediately, before session/passport can crash it
-app.options('*', cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 // ── Rate limiting ──────────────────────────────────────────────
 app.use('/api/auth/google', rateLimit({
