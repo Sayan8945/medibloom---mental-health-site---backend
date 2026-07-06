@@ -1,12 +1,20 @@
 const SurveyResponse = require('../models/SurveyResponse');
 
+// Allowlist of sections accepted from the client
+const ALLOWED_SECTIONS = [
+  'basicInfo', 'lifestyle', 'stress', 'emotional',
+  'anxiety', 'depression', 'social', 'digital',
+  'coping', 'history', 'consent',
+];
+
 // POST /api/survey
 const submitSurvey = async (req, res) => {
   try {
-    const payload = {
-      ...req.body,
-      submittedAt: new Date(),
-    };
+    // Only pick known sections — ignore any extra fields from the client
+    const payload = { submittedAt: new Date() };
+    ALLOWED_SECTIONS.forEach((key) => {
+      if (req.body[key] !== undefined) payload[key] = req.body[key];
+    });
 
     // Attach authenticated user data if logged in
     if (req.user) {
@@ -18,21 +26,23 @@ const submitSurvey = async (req, res) => {
     const response = await SurveyResponse.create(payload);
     return res.status(201).json({ success: true, id: response._id });
   } catch (err) {
-    console.error('Survey submission error:', err.message);
+    console.error('[survey] Submission error:', err.message);
     return res.status(500).json({ error: 'Failed to save survey response.' });
   }
 };
 
-// GET /api/survey/history  (authenticated user's own responses)
+// GET /api/survey/history
 const getSurveyHistory = async (req, res) => {
   try {
     const responses = await SurveyResponse
       .find({ userId: req.user._id })
       .select('submittedAt createdAt emotional anxiety depression social lifestyle stress basicInfo coping')
       .sort({ createdAt: -1 })
-      .limit(20);
+      .limit(20)
+      .lean();
     return res.json({ success: true, responses });
   } catch (err) {
+    console.error('[survey] History error:', err.message);
     return res.status(500).json({ error: 'Failed to fetch survey history.' });
   }
 };
@@ -40,16 +50,16 @@ const getSurveyHistory = async (req, res) => {
 // GET /api/survey/:id
 const getSurveyById = async (req, res) => {
   try {
-    const response = await SurveyResponse.findById(req.params.id);
+    const response = await SurveyResponse.findById(req.params.id).lean();
     if (!response) return res.status(404).json({ error: 'Not found.' });
 
-    // Only the owner or unauthenticated responses are accessible
     if (response.userId && req.user?._id?.toString() !== response.userId.toString()) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
     return res.json(response);
   } catch (err) {
+    console.error('[survey] Fetch error:', err.message);
     return res.status(500).json({ error: 'Failed to fetch survey response.' });
   }
 };
