@@ -12,10 +12,14 @@ therapist or doctor) for anything beyond general wellness guidance.`;
 
 /**
  * Generic system prompt — used when the user has no wellness data yet,
- * or has disabled personalization.
+ * has disabled personalization, or is a signed-out guest. Still greets by
+ * name when we have one (logged-in user, just no survey history yet).
  */
-function buildGenericSystemPrompt() {
-  return `${BASE_RULES}
+function buildGenericSystemPrompt(name) {
+  const nameLine = name
+    ? `\nThe user's name is ${name}. Address them by their first name naturally in conversation (not in every message).`
+    : '';
+  return `${BASE_RULES}${nameLine}
 You do not currently have this user's wellness history, so keep your
 responses general and helpful rather than referencing specific scores.`;
 }
@@ -26,6 +30,7 @@ responses general and helpful rather than referencing specific scores.`;
  */
 function buildPersonalizedSystemPrompt(context) {
   const {
+    name,
     wellnessScore, wellnessBand, wellnessTrend,
     stressScore, stressBand, stressTrend,
     anxietyScore, anxietyBand, anxietyTrend,
@@ -36,8 +41,12 @@ function buildPersonalizedSystemPrompt(context) {
     assessmentsCompleted, daysSinceLastSurvey,
   } = context;
 
-  return `${BASE_RULES}
+  const nameLine = name
+    ? `The user's name is ${name}. Address them by their first name naturally in conversation (not in every message).\n`
+    : '';
 
+  return `${BASE_RULES}
+${nameLine}
 Current user context (from their wellness assessments — use it to personalize
 your replies, but never quote these numbers verbatim unless it feels natural):
 - Wellness score: ${wellnessScore}/100 (${wellnessBand}), trend: ${wellnessTrend}
@@ -67,7 +76,7 @@ Guidelines:
  */
 function buildSystemPrompt(context, personalizationEnabled) {
   if (!personalizationEnabled || !context || !context.hasData) {
-    return buildGenericSystemPrompt();
+    return buildGenericSystemPrompt(context?.name);
   }
   return buildPersonalizedSystemPrompt(context);
 }

@@ -33,14 +33,17 @@ function trend(current, previous) {
 
 /**
  * Build a compact wellness context object for a user, for use in an AI
- * system prompt. Returns { hasData: false } when the user has no completed
- * assessments (first-time users, guests, etc.) — the caller should fall
- * back to fully generic chatbot behaviour in that case.
+ * system prompt. Returns { hasData: false, name } when the user has no
+ * completed assessments (first-time users, guests, etc.) — the caller
+ * should fall back to a lightly-personalized (name only) or fully generic
+ * chatbot behaviour in that case.
  *
  * @param {import('mongoose').Types.ObjectId|string} userId
+ * @param {string} [fullName] - the authenticated user's display name, if any
  */
-async function getUserWellnessContext(userId) {
-  if (!userId) return { hasData: false };
+async function getUserWellnessContext(userId, fullName) {
+  const name = fullName ? fullName.split(' ')[0] : null;
+  if (!userId) return { hasData: false, name };
 
   const [assessmentsCompleted, recent] = await Promise.all([
     SurveyResponse.countDocuments({ userId }),
@@ -52,7 +55,7 @@ async function getUserWellnessContext(userId) {
   ]);
 
   if (assessmentsCompleted === 0 || recent.length === 0) {
-    return { hasData: false };
+    return { hasData: false, name };
   }
 
   const [latestDoc, previousDoc] = recent;
@@ -67,6 +70,7 @@ async function getUserWellnessContext(userId) {
 
   return {
     hasData: true,
+    name,
     assessmentsCompleted,
     lastAssessmentDate,
     daysSinceLastSurvey,

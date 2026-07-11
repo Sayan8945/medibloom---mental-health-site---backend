@@ -44,15 +44,15 @@ const sendMessage = async (req, res) => {
     const isLoggedIn = typeof req.isAuthenticated === 'function' && req.isAuthenticated();
     const personalizationEnabled = isLoggedIn ? req.user.settings?.personalizedAI !== false : false;
 
-    let context = { hasData: false };
+    let context = { hasData: false, name: isLoggedIn ? req.user.fullName?.split(' ')[0] : null };
     if (isLoggedIn && personalizationEnabled) {
       try {
-        context = await getUserWellnessContext(req.user._id);
+        context = await getUserWellnessContext(req.user._id, req.user.fullName);
       } catch (ctxErr) {
         // Edge case: context lookup failing should never break the chat —
-        // fall back to generic behaviour and log server-side.
+        // fall back to a name-only greeting and log server-side.
         console.error('[chat] Wellness context lookup failed:', ctxErr.message);
-        context = { hasData: false };
+        context = { hasData: false, name: req.user.fullName?.split(' ')[0] };
       }
     }
 
