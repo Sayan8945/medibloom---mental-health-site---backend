@@ -32,6 +32,14 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // ── User-controlled preferences ──────────────────────────
+    settings: {
+      // "Allow AI assistant to use my survey history for personalized responses"
+      personalizedAI: {
+        type: Boolean,
+        default: true,
+      },
+    },
   },
   { timestamps: true }
 );

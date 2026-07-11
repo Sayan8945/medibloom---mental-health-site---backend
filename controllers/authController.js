@@ -7,10 +7,30 @@ const getMe = (req, res) => {
   if (!req.user) {
     return res.status(401).json({ authenticated: false, user: null });
   }
-  const { _id, fullName, email, avatar, provider, verified, createdAt } = req.user;
+  const { _id, fullName, email, avatar, provider, verified, createdAt, settings } = req.user;
   return res.json({
     authenticated: true,
-    user: { id: _id, fullName, email, avatar, provider, verified, createdAt },
+    user: {
+      id: _id, fullName, email, avatar, provider, verified, createdAt,
+      settings: { personalizedAI: settings?.personalizedAI !== false },
+    },
+  });
+};
+
+// PATCH /api/auth/settings
+// Body: { personalizedAI: boolean }
+const updateSettings = async (req, res) => {
+  const { personalizedAI } = req.body || {};
+  if (typeof personalizedAI !== 'boolean') {
+    return res.status(400).json({ error: '"personalizedAI" must be a boolean.' });
+  }
+
+  req.user.set('settings.personalizedAI', personalizedAI);
+  await req.user.save();
+
+  return res.json({
+    success: true,
+    settings: { personalizedAI: req.user.settings.personalizedAI },
   });
 };
 
@@ -35,4 +55,4 @@ const logout = (req, res) => {
   });
 };
 
-module.exports = { getMe, getStatus, logout };
+module.exports = { getMe, getStatus, logout, updateSettings };

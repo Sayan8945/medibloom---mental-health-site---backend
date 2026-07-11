@@ -26,16 +26,26 @@ Backend/
 │   ├── db.js              # Mongoose connection
 │   └── passport.js        # Google OAuth strategy, serialize/deserialize
 ├── controllers/
-│   ├── authController.js  # getMe, getStatus, logout
-│   └── surveyController.js# submitSurvey, getSurveyHistory, getSurveyById
+│   ├── authController.js      # getMe, getStatus, logout, updateSettings
+│   ├── surveyController.js    # submitSurvey, getSurveyHistory, getSurveyById
+│   ├── analyticsController.js # getTrends, getComparison, getSummary
+│   └── chatController.js      # sendMessage (context-aware Gemini chat)
 ├── middleware/
 │   └── isAuthenticated.js # Route guard — 401 if not logged in
 ├── models/
-│   ├── User.js            # googleId, fullName, email, avatar, provider, verified
+│   ├── User.js            # googleId, fullName, email, avatar, provider, verified, settings
 │   └── SurveyResponse.js  # All 10 survey sections + userId ref
 ├── routes/
 │   ├── authRoutes.js      # /api/auth/*
-│   └── surveyRoutes.js    # /api/survey/*
+│   ├── surveyRoutes.js    # /api/survey/*
+│   ├── analyticsRoutes.js # /api/analytics/*
+│   └── chatRoutes.js      # /api/chat
+├── services/
+│   ├── wellnessContextService.js # Builds compact wellness summary from survey history
+│   └── geminiService.js          # Gemini REST API client
+├── utils/
+│   ├── scoring.js            # computeScores() — canonical wellness scoring
+│   └── chatPromptBuilder.js  # Builds the dynamic Gemini system prompt
 ├── .env                   # Environment variables (never commit this)
 ├── package.json
 └── server.js              # App entry point
@@ -70,6 +80,8 @@ GOOGLE_CALLBACK_URL=http://localhost:5000/api/auth/google/callback
 SESSION_SECRET=a_long_random_secret_string
 CLIENT_URL=http://localhost:5173
 PORT=5000
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 > **Never commit `.env` to version control.** It is listed in `.gitignore`.
@@ -115,6 +127,21 @@ Server starts on `http://localhost:5000`
 | GET | `/api/survey/history` | ✓ Required | Get authenticated user's past submissions |
 | GET | `/api/survey/:id` | Optional | Fetch a single response by ID |
 
+### Analytics
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/analytics/trends` | ✓ Required | Score trends over time (supports `?range=7d\|30d\|90d\|1y\|all`) |
+| GET | `/api/analytics/comparison` | ✓ Required | Latest vs. previous assessment comparison |
+| GET | `/api/analytics/summary` | ✓ Required | Current/best/average score, insights, achievement badges |
+
+### Chat
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/api/chat` | Optional | Send a chat message to the Gemini-powered assistant. When the caller is signed in **and** has `settings.personalizedAI` enabled, the reply is personalized using a compact summary of their wellness history (scores + trends only — never raw survey answers or full chat history sent to Gemini). Guests and users with personalization disabled receive fully generic responses. |
+| PATCH | `/api/auth/settings` | ✓ Required | Update `{ personalizedAI: boolean }` — controls whether the chatbot may use the user's wellness history. |
+
 ---
 
 ## Environment Variables Reference
@@ -128,6 +155,8 @@ Server starts on `http://localhost:5000`
 | `SESSION_SECRET` | Secret for signing session cookies | Long random string |
 | `CLIENT_URL` | Frontend origin for CORS + OAuth redirect | `http://localhost:5173` |
 | `PORT` | Port the server listens on | `5000` |
+| `GEMINI_API_KEY` | Google Gemini API key — kept server-side only, never sent to the browser | From [Google AI Studio](https://aistudio.google.com) |
+| `GEMINI_MODEL` | Gemini model name (optional, defaults to `gemini-2.5-flash`) | `gemini-2.5-flash` |
 
 ---
 
@@ -135,7 +164,7 @@ Server starts on `http://localhost:5000`
 
 - **Helmet** — sets secure HTTP headers
 - **CORS** — restricted to `CLIENT_URL` origin with credentials
-- **Rate limiting** — `/api/auth/google` limited to 20 requests per 15 minutes
+- **Rate limiting** — `/api/auth/google` limited to 20 requests per 15 minutes; `/api/survey` limited to 30 per hour; `/api/chat` limited to 30 per 10 minutes (LLM calls cost money)
 - **HTTPOnly cookies** — session cookie not accessible from JavaScript
 - **SameSite cookies** — `lax` in development, `none` (with `secure`) in production
 - **Session store** — sessions persisted in MongoDB, not memory
@@ -155,6 +184,9 @@ Server starts on `http://localhost:5000`
   avatar:     String,   // Google profile photo URL
   provider:   String,   // "google"
   verified:   Boolean,
+  settings: {
+    personalizedAI: Boolean // default true — allows chatbot to use wellness history
+  },
   createdAt:  Date,
   updatedAt:  Date
 }

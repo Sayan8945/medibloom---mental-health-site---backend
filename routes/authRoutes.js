@@ -1,6 +1,7 @@
 const express  = require('express');
 const passport = require('passport');
-const { getMe, getStatus, logout } = require('../controllers/authController');
+const { getMe, getStatus, logout, updateSettings } = require('../controllers/authController');
+const isAuthenticated = require('../middleware/isAuthenticated');
 
 const router = express.Router();
 
@@ -30,5 +31,6 @@ router.get(
 router.get('/me',     getMe);
 router.get('/status', getStatus);
 router.post('/logout', logout);
+router.patch('/settings', isAuthenticated, updateSettings);
 
 module.exports = router;

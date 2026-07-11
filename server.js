@@ -24,8 +24,10 @@ const { MongoStore } = require('connect-mongo');
 const rateLimit    = require('express-rate-limit');
 const connectDB    = require('./config/db');
 const passport     = require('./config/passport');
-const authRoutes   = require('./routes/authRoutes');
-const surveyRoutes = require('./routes/surveyRoutes');
+const authRoutes      = require('./routes/authRoutes');
+const surveyRoutes    = require('./routes/surveyRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
+const chatRoutes      = require('./routes/chatRoutes');
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -90,6 +92,15 @@ app.use('/api/survey', rateLimit({
   message: { error: 'Too many survey submissions. Please try again later.' },
 }));
 
+// LLM calls cost money — cap chat usage per IP regardless of auth state
+app.use('/api/chat', rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many messages. Please wait a moment before trying again.' },
+}));
+
 // ── Body parsers ───────────────────────────────────────────────
 app.use(express.json({ limit: '512kb' }));
 app.use(express.urlencoded({ extended: true, limit: '512kb' }));
@@ -119,8 +130,10 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ── Routes ─────────────────────────────────────────────────────
-app.use('/api/auth',   authRoutes);
-app.use('/api/survey', surveyRoutes);
+app.use('/api/auth',      authRoutes);
+app.use('/api/survey',    surveyRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/chat',      chatRoutes);
 
 app.get('/', (_req, res) => res.json({ message: 'MediBloom API', version: '2.0' }));
 
