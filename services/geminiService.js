@@ -49,4 +49,71 @@ async function generateChatReply(systemPrompt, history) {
   return replyText.replace(/\*\*(.*?)\*\*/g, '$1').trim();
 }
 
-module.exports = { generateChatReply };
+// Fixed schema for structured recommendation output — keeps Gemini from
+// wrapping/deviating the JSON shape so the backend never has to guess.
+const RECOMMENDATIONS_SCHEMA = {
+  type: 'ARRAY',
+  items: {
+    type: 'OBJECT',
+    properties: {
+      title:       { type: 'STRING' },
+      description: { type: 'STRING' },
+      category:    { type: 'STRING', enum: ['stress', 'anxiety', 'mood', 'sleep', 'lifestyle', 'social', 'general'] },
+      priority:    { type: 'STRING', enum: ['high', 'medium', 'low'] },
+    },
+    required: ['title', 'description', 'category', 'priority'],
+  },
+};
+
+/**
+ * Single-turn structured generation for personalized recommendations.
+ * Uses responseSchema so Gemini returns strict JSON instead of prose.
+ * @param {string} prompt - full instruction prompt (see recommendationPromptBuilder.js)
+ * @returns {Promise<Array<{title:string, description:string, category:string, priority:string}>>}
+ */
+async function generateRecommendations(prompt) {
+  if (!GEMINI_API_KEY) {
+    throw new Error('Recommendations are not configured. Please contact support.');
+  }
+
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: RECOMMENDATIONS_SCHEMA,
+    },
+  };
+
+  const response = await fetch(GEMINI_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const message = data?.error?.message || 'Recommendations are temporarily unavailable.';
+    throw new Error(message);
+  }
+
+  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!raw) {
+    throw new Error('Could not generate recommendations. Please try again.');
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('Could not generate recommendations. Please try again.');
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error('Could not generate recommendations. Please try again.');
+  }
+
+  return parsed;
+}
+
+module.exports = { generateChatReply, generateRecommendations };

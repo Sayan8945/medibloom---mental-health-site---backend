@@ -28,6 +28,7 @@ const authRoutes      = require('./routes/authRoutes');
 const surveyRoutes    = require('./routes/surveyRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const chatRoutes      = require('./routes/chatRoutes');
+const recommendationsRoutes = require('./routes/recommendationsRoutes');
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -101,6 +102,15 @@ app.use('/api/chat', rateLimit({
   message: { error: 'Too many messages. Please wait a moment before trying again.' },
 }));
 
+// Recommendations also call Gemini — cap regeneration requests per IP
+app.use('/api/recommendations', rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please wait a moment before trying again.' },
+}));
+
 // ── Body parsers ───────────────────────────────────────────────
 app.use(express.json({ limit: '512kb' }));
 app.use(express.urlencoded({ extended: true, limit: '512kb' }));
@@ -134,6 +144,7 @@ app.use('/api/auth',      authRoutes);
 app.use('/api/survey',    surveyRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/chat',      chatRoutes);
+app.use('/api/recommendations', recommendationsRoutes);
 
 app.get('/', (_req, res) => res.json({ message: 'MediBloom API', version: '2.0' }));
 
