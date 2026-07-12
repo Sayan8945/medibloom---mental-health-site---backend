@@ -74,6 +74,10 @@ async function getUserWellnessContext(userId, fullName) {
     assessmentsCompleted,
     lastAssessmentDate,
     daysSinceLastSurvey,
+    // Id of the survey response this context was built from — callers that
+    // cache derived data (e.g. recommendations) key their cache on this so
+    // it invalidates automatically when the user submits a new assessment.
+    latestResponseId: latestDoc._id,
 
     wellnessScore: latest.overall,      wellnessBand: band(latest.overall),
     stressScore: latest.stress,         stressBand: band(latest.stress),
