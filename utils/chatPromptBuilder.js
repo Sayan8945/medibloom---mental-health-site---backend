@@ -15,13 +15,15 @@ therapist or doctor) for anything beyond general wellness guidance.`;
  * has disabled personalization, or is a signed-out guest. Still greets by
  * name when we have one (logged-in user, just no survey history yet).
  */
-function buildGenericSystemPrompt(name) {
+function buildGenericSystemPrompt(name, context) {
   const nameLine = name
     ? `\nThe user's name is ${name}. Address them by their first name naturally in conversation (not in every message).`
     : '';
-  return `${BASE_RULES}${nameLine}
-You do not currently have this user's wellness history, so keep your
-responses general and helpful rather than referencing specific scores.`;
+  const moodBlock = buildMoodContextBlock(context || {});
+  const moodNote = moodBlock
+    ? `\nYou do not have this user's survey/assessment history, but they do have\nrecent daily mood check-ins below — use those to personalize your replies.\n${moodBlock}`
+    : `\nYou do not currently have this user's wellness history, so keep your\nresponses general and helpful rather than referencing specific scores.`;
+  return `${BASE_RULES}${nameLine}${moodNote}`;
 }
 
 /**
@@ -57,7 +59,7 @@ your replies, but never quote these numbers verbatim unless it feels natural):
 - Lifestyle score: ${lifestyleScore}/100 (${lifestyleBand})
 - Social wellbeing score: ${socialScore}/100 (${socialBand})
 - Assessments completed: ${assessmentsCompleted} (last one ${daysSinceLastSurvey} day${daysSinceLastSurvey === 1 ? '' : 's'} ago)
-
+${buildMoodContextBlock(context)}
 Guidelines:
 - If a trend is "Improving", acknowledge the positive progress genuinely.
 - If a trend is "Declining", gently and non-judgmentally explore possible
@@ -65,8 +67,34 @@ Guidelines:
   the user.
 - If it's been more than 14 days since their last assessment, you may
   casually suggest checking in with a new assessment, without being pushy.
+- If daily check-in data is present and shows a concerning pattern (e.g.
+  rising stress alongside falling sleep), you may gently ask what's changed
+  recently, similar to the assessment-trend guidance above.
 - Never present this context as a diagnosis. Frame everything as
   observations from their self-reported check-ins.`;
+}
+
+/**
+ * Renders the optional daily mood check-in section appended to the
+ * personalized system prompt. Returns an empty string when the user has no
+ * mood check-ins yet, so guests/new users see no change in behavior.
+ */
+function buildMoodContextBlock(context) {
+  if (!context.hasMoodData) return '';
+
+  const {
+    currentMoodLabel, currentEnergyLevel, currentStressLevel, currentSleepQuality,
+    moodTrend, stressTrendRecent, sleepTrendRecent, energyTrendRecent,
+  } = context;
+
+  return `
+Recent daily check-in (today or most recent day logged):
+- Current Mood: ${currentMoodLabel}
+- Stress Level: ${currentStressLevel}/10
+- Sleep Quality: ${currentSleepQuality}/10
+- Energy Level: ${currentEnergyLevel}/10
+Recent Trend (last several days): mood ${moodTrend}, stress ${stressTrendRecent}, sleep ${sleepTrendRecent}, energy ${energyTrendRecent}
+`;
 }
 
 /**
@@ -75,8 +103,13 @@ Guidelines:
  * @param {boolean} personalizationEnabled - user's privacy setting
  */
 function buildSystemPrompt(context, personalizationEnabled) {
-  if (!personalizationEnabled || !context || !context.hasData) {
+  if (!personalizationEnabled || !context) {
     return buildGenericSystemPrompt(context?.name);
+  }
+  if (!context.hasData) {
+    // No survey history, but may still have daily mood check-ins to
+    // personalize with (buildGenericSystemPrompt appends them if present).
+    return buildGenericSystemPrompt(context.name, context);
   }
   return buildPersonalizedSystemPrompt(context);
 }

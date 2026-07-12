@@ -8,10 +8,15 @@
  * bands, and trends.
  */
 const SurveyResponse = require('../models/SurveyResponse');
+const MoodEntry = require('../models/MoodEntry');
 const { computeScores } = require('../utils/scoring');
+const { trendDirection, MOOD_SCALE } = require('../utils/moodUtils');
 
 // Only need the latest 2 responses to compute "current vs previous" trends
 const RECENT_LIMIT = 2;
+
+// How many recent daily check-ins to consider for mood trend context
+const RECENT_MOOD_LIMIT = 7;
 
 // Qualitative band for a 0-100 score (higher = better across all dimensions)
 function band(score) {
@@ -45,17 +50,26 @@ async function getUserWellnessContext(userId, fullName) {
   const name = fullName ? fullName.split(' ')[0] : null;
   if (!userId) return { hasData: false, name };
 
-  const [assessmentsCompleted, recent] = await Promise.all([
+  const [assessmentsCompleted, recent, recentMoodEntries] = await Promise.all([
     SurveyResponse.countDocuments({ userId }),
     SurveyResponse.find({ userId })
       .select('submittedAt createdAt basicInfo emotional anxiety depression social lifestyle stress')
       .sort({ submittedAt: -1, createdAt: -1 })
       .limit(RECENT_LIMIT)
       .lean(),
+    MoodEntry.find({ userId })
+      .sort({ date: -1 })
+      .limit(RECENT_MOOD_LIMIT)
+      .lean(),
   ]);
 
+  // Daily mood check-in context — kept separate from survey-derived
+  // "hasData" below since a user may have mood check-ins without ever
+  // having completed a full survey (or vice versa).
+  const moodContext = buildMoodContext(recentMoodEntries);
+
   if (assessmentsCompleted === 0 || recent.length === 0) {
-    return { hasData: false, name };
+    return { hasData: false, name, ...moodContext };
   }
 
   const [latestDoc, previousDoc] = recent;
@@ -95,6 +109,37 @@ async function getUserWellnessContext(userId, fullName) {
 
     age: latestDoc.basicInfo?.age || null,
     occupation: latestDoc.basicInfo?.occupation || null,
+
+    ...moodContext,
+  };
+}
+
+/**
+ * Build a compact context block from a user's most recent daily mood
+ * check-ins (newest first), for use alongside the survey-derived context.
+ * Returns `{ hasMoodData: false }` when there are no check-ins yet.
+ */
+function buildMoodContext(recentMoodEntries) {
+  if (!recentMoodEntries || recentMoodEntries.length === 0) {
+    return { hasMoodData: false };
+  }
+
+  // Entries arrive newest-first; reverse to oldest->newest for trend calc.
+  const chronological = [...recentMoodEntries].reverse();
+  const latest = recentMoodEntries[0];
+
+  return {
+    hasMoodData: true,
+    currentMoodLabel: MOOD_SCALE[latest.mood]?.label || 'Unknown',
+    currentMoodValue: latest.mood,
+    currentEnergyLevel: latest.energyLevel,
+    currentStressLevel: latest.stressLevel,
+    currentSleepQuality: latest.sleepQuality,
+    lastCheckInDate: latest.date,
+    moodTrend: trendDirection(chronological.map((e) => e.mood), 0.5),
+    stressTrendRecent: trendDirection(chronological.map((e) => e.stressLevel)),
+    sleepTrendRecent: trendDirection(chronological.map((e) => e.sleepQuality)),
+    energyTrendRecent: trendDirection(chronological.map((e) => e.energyLevel)),
   };
 }
 

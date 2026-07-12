@@ -29,6 +29,7 @@ const surveyRoutes    = require('./routes/surveyRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const chatRoutes      = require('./routes/chatRoutes');
 const recommendationsRoutes = require('./routes/recommendationsRoutes');
+const moodRoutes      = require('./routes/moodRoutes');
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -93,6 +94,16 @@ app.use('/api/survey', rateLimit({
   message: { error: 'Too many survey submissions. Please try again later.' },
 }));
 
+// Mood check-ins are lightweight and daily, but still cap create/update
+// bursts (one real check-in per day is expected, this just guards abuse).
+app.use('/api/mood', rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+}));
+
 // LLM calls cost money — cap chat usage per IP regardless of auth state
 app.use('/api/chat', rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
@@ -145,6 +156,7 @@ app.use('/api/survey',    surveyRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/chat',      chatRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
+app.use('/api/mood',      moodRoutes);
 
 app.get('/', (_req, res) => res.json({ message: 'MediBloom API', version: '2.0' }));
 
