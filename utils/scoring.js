@@ -1,7 +1,12 @@
 /**
  * Wellness scoring — mirrors the frontend scoring logic exactly
- * (frontend: StepResults.jsx / SurveyHistoryPage.jsx computeScores).
- * Keep these two in sync. All scores are 0-100 where higher = better.
+ * (frontend: frontend/src/utils/wellnessScoring.js computeScores, used by
+ * StepResults.jsx and SurveyHistoryPage.jsx).
+ *
+ * Backend and frontend live in separate repos with no shared package, so
+ * this can't be enforced by imports — any change here MUST be ported by
+ * hand to the frontend copy, and vice versa. All scores are 0-100 where
+ * higher = better.
  */
 
 const avg = (vals) => {
