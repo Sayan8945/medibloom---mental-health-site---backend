@@ -158,6 +158,7 @@ app.use('/api/chat',      chatRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
 app.use('/api/mood',      moodRoutes);
 
+app.get('/health', ((req,res) => res.json({ check: 'working correctly' }));
 app.get('/', (_req, res) => res.json({ message: 'MediBloom API', version: '2.0' }));
 
 // ── 404 handler ────────────────────────────────────────────────
